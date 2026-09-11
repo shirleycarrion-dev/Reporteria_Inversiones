@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Automatizador de Reportería Post Cierre</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+
+<style>
+:root{
+ --bg:#040c18;--panel:#0b1d34;--panel2:#102846;--line:rgba(66,156,225,.20);
+ --txt:#edf7ff;--muted:#8eabc6;--cyan:#17d9f5;--blue:#368cff;--green:#2ce3aa;
+ --orange:#ffb45b;--red:#ff7082;--purple:#a978ff;--shadow:0 22px 70px rgba(0,0,0,.38)
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+ margin:0;min-height:100vh;color:var(--txt);font-family:Inter,Segoe UI,Arial,sans-serif;
+ background:
+ radial-gradient(circle at 76% 8%,#123b66 0,#08182d 28%,#040c18 66%);
+ overflow-x:hidden
+}
+body:before{
+ content:"";position:fixed;inset:0;pointer-events:none;z-index:-2;
+ background-image:linear-gradient(rgba(72,145,210,.035) 1px,transparent 1px),
+ linear-gradient(90deg,rgba(72,145,210,.035) 1px,transparent 1px);
+ background-size:32px 32px
+}
+body:after{
+ content:"";position:fixed;width:520px;height:520px;right:-180px;top:12%;
+ border-radius:50%;background:radial-gradient(circle,rgba(23,217,245,.10),rgba(54,140,255,.04) 40%,transparent 70%);
+ filter:blur(12px);pointer-events:none;z-index:-1;animation:ambient 8s ease-in-out infinite alternate
+}
+@keyframes ambient{to{transform:translate(-45px,55px) scale(1.12)}}
+button{font:inherit}
+.app-shell{display:grid;grid-template-columns:270px minmax(0,1fr);min-height:100vh}
+.sidebar{
+ position:sticky;top:0;height:100vh;padding:26px 18px;
+ background:linear-gradient(180deg,rgba(6,25,46,.96),rgba(4,13,27,.98));
+ border-right:1px solid rgba(68,151,216,.20);box-shadow:15px 0 60px rgba(0,0,0,.18);
+ overflow:auto;z-index:20
+}
+
+.brand-logo-wrap{
+ display:flex;align-items:center;justify-content:flex-start;
+ min-height:70px;margin:0 0 10px;padding:8px 4px;
+}
+.brand-logo{
+ display:block;width:170px;max-width:100%;height:auto;object-fit:contain;
+ filter:drop-shadow(0 8px 18px rgba(0,122,204,.14));
+}
+
+.brand-orb{
+ width:58px;height:58px;border-radius:50%;
+ background:radial-gradient(circle at 31% 26%,#bffaff 0,#20d7f4 10%,#1179bf 35%,#09213b 67%,#04101e 80%);
+ box-shadow:inset -10px -10px 24px rgba(0,0,0,.38),0 0 26px rgba(23,217,245,.30),0 0 70px rgba(54,140,255,.18);
+ margin-bottom:17px;position:relative;animation:float 5s ease-in-out infinite
+}
+.brand-orb:after{content:"";position:absolute;inset:12%;border-radius:50%;border:1px solid rgba(191,250,255,.28);transform:rotate(-25deg)}
+@keyframes float{50%{transform:translateY(-6px)}}
+.brand-title{font-size:16px;font-weight:850;letter-spacing:.10em}
+.brand-sub{font-size:11px;color:var(--muted);margin:7px 0 25px;line-height:1.55}
+.nav-label{font-size:9px;color:#6f90ad;text-transform:uppercase;letter-spacing:.18em;margin:18px 10px 8px}
+.nav{display:grid;gap:4px}
+.nav a{
+ text-decoration:none;color:#a9bdd0;padding:11px 12px;border-radius:12px;transition:.22s;
+ font-size:12px;display:flex;align-items:center;gap:10px
+}
+.nav a:hover,.nav a.active{
+ background:linear-gradient(90deg,rgba(23,217,245,.16),rgba(54,140,255,.06));
+ color:#fff;box-shadow:inset 3px 0 var(--cyan)
+}
+.nav-dot{width:7px;height:7px;border-radius:50%;background:#42617d}
+.nav a.active .nav-dot{background:var(--cyan);box-shadow:0 0 12px var(--cyan)}
+.side-status{
+ margin-top:28px;padding:13px;border-radius:14px;border:1px solid rgba(72,159,225,.17);
+ background:rgba(8,29,51,.52);font-size:10px;color:#7f9db7;line-height:1.55
+}
+.side-status b{color:#bceaf3}
+main{min-width:0}
+.topbar{
+ height:70px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;
+ border-bottom:1px solid rgba(69,145,204,.16);background:rgba(5,15,29,.58);
+ backdrop-filter:blur(18px);position:sticky;top:0;z-index:15
+}
+.crumb{font-size:12px;color:#819db8}.crumb b{color:#e7f8ff}
+.live-badge{
+ display:flex;align-items:center;gap:8px;font-size:11px;color:#91b0c9;padding:8px 12px;
+ border:1px solid rgba(72,156,221,.20);border-radius:999px;background:rgba(8,29,51,.55)
+}
+.live-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 14px var(--green)}
+.content{padding:30px 30px 70px;max-width:1500px;margin:auto}
+.hero{
+ display:grid;grid-template-columns:1fr;gap:18px;margin-bottom:18px;
+ perspective:1200px
+}
+.hero-main,.hero-visual,.glass-card,.step,.kpi,.status,.note,.actions{
+ background:linear-gradient(145deg,rgba(16,43,73,.82),rgba(7,22,40,.88));
+ border:1px solid rgba(72,159,225,.18);box-shadow:var(--shadow)
+}
+.hero-main,.hero-visual{border-radius:22px;position:relative;overflow:hidden;min-height:280px}
+.hero-main{padding:30px}
+.eyebrow{font-size:10px;letter-spacing:.18em;color:#79c9df;text-transform:uppercase}
+h1{font-size:36px;letter-spacing:-.04em;margin:9px 0 9px}
+.hero-copy{color:var(--muted);font-size:13px;line-height:1.6;max-width:690px}
+.hero-pills{display:flex;gap:8px;flex-wrap:wrap;margin-top:20px}
+.hero-pills span{font-size:10px;padding:7px 10px;border-radius:999px;background:#0a1e36;color:#91aec7;border:1px solid rgba(86,150,202,.16)}
+.section-title{font-size:16px;margin:26px 0 12px;letter-spacing:.02em}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.step{border-radius:16px;padding:15px;position:relative;overflow:hidden;transition:.25s transform,.25s border-color}
+.step:hover{transform:translateY(-5px);border-color:rgba(23,217,245,.42)}
+.step .n{font-size:10px;color:#6f91ad;letter-spacing:.13em}.step b{display:block;margin:7px 0 4px;font-size:12px}.step span{color:var(--muted);font-size:10px;line-height:1.45}
+.inputs{display:grid;grid-template-columns:repeat(2,1fr);gap:15px}
+.glass-card{
+ border-radius:19px;padding:18px;position:relative;overflow:hidden;
+ transform-style:preserve-3d;transition:transform .18s ease,border-color .2s ease,box-shadow .2s ease
+}
+.glass-card:before{
+ content:"";position:absolute;inset:0;background:radial-gradient(circle at var(--mx,50%) var(--my,50%),rgba(23,217,245,.10),transparent 34%);
+ opacity:0;transition:.25s;pointer-events:none
+}
+.glass-card:hover:before{opacity:1}
+.glass-card:hover{border-color:rgba(23,217,245,.34);box-shadow:0 24px 70px rgba(0,0,0,.36),0 0 28px rgba(23,217,245,.08)}
+.card-top{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.icon3d{
+ width:42px;height:42px;flex:0 0 42px;border-radius:13px;display:grid;place-items:center;
+ background:linear-gradient(145deg,rgba(24,76,116,.95),rgba(9,29,50,.95));
+ border:1px solid rgba(66,199,212,.20);box-shadow:inset 0 1px rgba(255,255,255,.05),0 10px 24px rgba(0,0,0,.20);
+ color:#74e8f3;font-weight:900
+}
+.glass-card h3{margin:0;font-size:14px}.glass-card p{margin:5px 0 0;color:var(--muted);font-size:10.5px;line-height:1.45}
+.drop{
+ display:block;border:1px dashed #3b6c94;border-radius:14px;padding:17px;cursor:pointer;
+ background:rgba(4,17,31,.36);transition:.22s;position:relative
+}
+.drop:hover{border-color:var(--cyan);background:rgba(23,217,245,.05);box-shadow:inset 0 0 25px rgba(23,217,245,.04)}
+.drop:after{content:"↑";position:absolute;right:14px;top:13px;width:27px;height:27px;border-radius:9px;display:grid;place-items:center;background:rgba(23,217,245,.09);color:#7deef8}
+input[type=file]{display:none}
+.filename{display:block;color:#dcecff;font-size:10.5px;margin-top:8px;word-break:break-all;max-width:88%}
+.base-panel{margin-top:16px;padding:18px;border-radius:19px;border:1px solid rgba(167,120,255,.17);background:linear-gradient(145deg,rgba(32,27,61,.38),rgba(7,22,40,.78));box-shadow:var(--shadow)}
+.base-title{font-size:11px;color:#cbb8ff;letter-spacing:.11em;text-transform:uppercase;margin-bottom:12px}
+.actions{margin-top:18px;padding:14px;border-radius:16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+button{
+ border:0;border-radius:12px;padding:12px 18px;font-weight:800;cursor:pointer;color:white;
+ background:linear-gradient(135deg,#158fcb,#6258e8);box-shadow:0 10px 30px rgba(25,121,201,.20);
+ transition:.2s transform,.2s box-shadow,.2s filter
+}
+button:hover:not(:disabled){transform:translateY(-2px);filter:brightness(1.07);box-shadow:0 14px 36px rgba(25,121,201,.28)}
+button.secondary{background:#102943;border:1px solid rgba(72,159,225,.20);box-shadow:none}
+button:disabled{opacity:.38;cursor:not-allowed}
+.status{margin-top:14px;border-radius:16px;padding:15px;min-height:55px;font-size:11px;line-height:1.55}
+.ok{color:#8ff2c4}.warn{color:#ffe08b}.bad{color:#ffb0bd}.muted{color:var(--muted)}
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-top:14px}
+.kpi{border-radius:16px;padding:15px;transition:.22s transform}
+.kpi:hover{transform:translateY(-4px)}
+.kpi small{color:#7696b2;font-size:9px;text-transform:uppercase;letter-spacing:.08em}.kpi strong{display:block;font-size:20px;margin-top:7px}
+.log{margin-top:12px;background:#030a13;border:1px solid #172e46;border-radius:14px;padding:12px;max-height:250px;overflow:auto;font:10.5px/1.6 Consolas,monospace;display:none;box-shadow:inset 0 12px 24px rgba(0,0,0,.24)}
+.note{margin-top:14px;border-radius:14px;padding:13px 15px;border-left:3px solid var(--cyan);font-size:11px;color:#a7bfd2;line-height:1.55}
+.secure-chip{display:inline-flex;align-items:center;gap:7px;margin-left:auto;font-size:10px;color:#8eadc3}.secure-chip:before{content:"●";color:var(--green);text-shadow:0 0 10px var(--green)}
+@media(max-width:1100px){.app-shell{grid-template-columns:220px 1fr}.hero{grid-template-columns:1fr}.inputs{grid-template-columns:1fr}.steps{grid-template-columns:repeat(2,1fr)}.kpis{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:760px){.app-shell{display:block}.sidebar{position:relative;height:auto}.content{padding:20px 14px}.topbar{padding:0 14px}.steps,.kpis{grid-template-columns:1fr}.hero-visual{min-height:230px}}
+</style>
+</head>
+
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand-logo-wrap">
+      <img class="brand-logo" src="data:image/png;base64,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" alt="Interseguro">
+    </div>
+    <div class="brand-sub">Reportería de Inversiones<br>Automatización Post Cierre</div>
+    <div class="nav-label">Flujo mensual</div>
+    <nav class="nav">
+      <a href="#inicio" class="active"><span class="nav-dot"></span>Inicio</a>
+      <a href="#inputs"><span class="nav-dot"></span>Inputs del cierre</a>
+      <a href="#bases"><span class="nav-dot"></span>Archivos base</a>
+      <a href="#proceso"><span class="nav-dot"></span>Procesamiento</a>
+      <a href="#salidas"><span class="nav-dot"></span>Salidas Excel</a>
+    </nav>
+    <div class="side-status"><b>Procesamiento local</b><br>Los Excel se procesan en tu navegador y no se almacenan en la página.</div>
+  </aside>
+
+  <main>
+    <div class="topbar">
+      <div class="crumb">Operaciones / Técnica / <b>Post Cierre</b></div>
+      <div class="live-badge"><span class="live-dot"></span>Sistema listo</div>
+    </div>
+
+    <div class="content">
+      <section id="inicio" class="hero">
+        <div class="hero-main">
+          <div class="eyebrow">AUTOMATIZACIÓN MENSUAL · POST CIERRE</div>
+          <h1>Reportería de Inversiones</h1>
+          <div class="hero-copy">Carga los inputs del mes, valida la información y genera automáticamente los archivos <b>Flex</b> e <b>Inversiones</b> manteniendo la estructura y el formato de tus plantillas.</div>
+          <div class="hero-pills">
+            <span>MIR Técnica</span><span>TDR Fondos</span><span>Capital Flexible</span><span>Modelo FLEX/Vinv</span>
+          </div>
+        </div>
+</section>
+
+      <div class="section-title">Flujo automático</div>
+      <section class="steps">
+        <div class="step"><span class="n">PASO 01</span><b>Cargar inputs</b><span>Importa los cuatro archivos de cierre del mes.</span></div>
+        <div class="step"><span class="n">PASO 02</span><b>Validar información</b><span>Revisa columnas, período, pólizas y fondos.</span></div>
+        <div class="step"><span class="n">PASO 03</span><b>Procesar cierre</b><span>Actualiza BBDD, reservas, rentabilidad e inversiones.</span></div>
+        <div class="step"><span class="n">PASO 04</span><b>Exportar resultados</b><span>Genera Flex e Inversiones listos para revisión.</span></div>
+      </section>
+
+      <div id="inputs" class="section-title">Inputs del cierre</div>
+      <section class="inputs">
+        <div class="glass-card tilt">
+          <div class="card-top"><div class="icon3d">MIR</div><div><h3>MIR Técnica Vida – Valor Póliza</h3><p>Fuente principal de pólizas, CP, CAV, fondos y producto.</p></div></div>
+          <label class="drop">Seleccionar MIR<input id="mir" type="file" accept=".xlsx,.xlsm"><span id="mirN" class="filename">Sin archivo</span></label>
+        </div>
+        <div class="glass-card tilt">
+          <div class="card-top"><div class="icon3d">TDR</div><div><h3>TDRentabilidadFondos</h3><p>Rentabilidad mensual por código de fondo.</p></div></div>
+          <label class="drop">Seleccionar TDR<input id="tdr" type="file" accept=".xlsx,.xlsm"><span id="tdrN" class="filename">Sin archivo</span></label>
+        </div>
+        <div class="glass-card tilt">
+          <div class="card-top"><div class="icon3d">RVI</div><div><h3>Cálculo RVI – Capital Flexible</h3><p>Reservas y rentabilidad de Capitalización, Moderado y Conservador.</p></div></div>
+          <label class="drop">Seleccionar Capital Flexible<input id="cap" type="file" accept=".xlsx,.xlsm"><span id="capN" class="filename">Sin archivo</span></label>
+        </div>
+        <div class="glass-card tilt">
+          <div class="card-top"><div class="icon3d">FX</div><div><h3>Modelo FLEX / Vida Inversión</h3><p>Control cruzado de póliza e intereses contra la BBDD del modelo.</p></div></div>
+          <label class="drop">Seleccionar Modelo FLEX<input id="modelo" type="file" accept=".xlsx,.xlsm"><span id="modeloN" class="filename">Sin archivo</span></label>
+        </div>
+      </section>
+
+      <section id="bases" class="base-panel">
+        <div class="base-title">Archivos base obligatorios del mes anterior</div>
+        <div class="inputs">
+          <div class="glass-card tilt">
+            <div class="card-top"><div class="icon3d">F</div><div><h3>Flex del mes anterior</h3><p>Conserva formato, fórmulas e histórico.</p></div></div>
+            <label class="drop">Seleccionar Flex anterior<input id="baseFlex" type="file" accept=".xlsx"><span id="baseFlexN" class="filename">Sin archivo</span></label>
+          </div>
+          <div class="glass-card tilt">
+            <div class="card-top"><div class="icon3d">I</div><div><h3>Inversiones del mes anterior</h3><p>Conserva formato e histórico de inversiones.</p></div></div>
+            <label class="drop">Seleccionar Inversiones anterior<input id="baseInv" type="file" accept=".xlsx"><span id="baseInvN" class="filename">Sin archivo</span></label>
+          </div>
+        </div>
+      </section>
+
+      <section id="proceso">
+        <div class="actions">
+          <button id="process">Procesar cierre</button>
+          <button id="downFlex" class="secondary" disabled>Descargar Flex</button>
+          <button id="downInv" class="secondary" disabled>Descargar Inversiones</button>
+          <span class="secure-chip">Procesamiento seguro en navegador</span>
+        </div>
+        <div id="status" class="status"><span class="muted">Carga los 6 archivos del cierre y presiona “Procesar cierre”.</span></div>
+      </section>
+
+      <section id="salidas">
+        <div id="kpis" class="kpis" style="display:none">
+          <div class="kpi"><small>Período</small><strong id="kPeriod">-</strong></div>
+          <div class="kpi"><small>Registros MIR</small><strong id="kRows">0</strong></div>
+          <div class="kpi"><small>Flex IS</small><strong id="kFlex">0</strong></div>
+          <div class="kpi"><small>Vida Inversión</small><strong id="kVida">0</strong></div>
+          <div class="kpi"><small>Total reservas</small><strong id="kTotal">0</strong></div>
+        </div>
+        <div id="log" class="log"></div>
+        <div class="note">El HTML no contiene información de tus Excel. Todo se procesa localmente en tu navegador. Cada mes carga el <b>Flex</b> y <b>Inversiones</b> del mes anterior como base para conservar formato e histórico.</div>
+      </section>
+    </div>
+  </main>
+</div>
+<script>
+const TEMPLATE_FLEX_B64 = null;
+const TEMPLATE_INV_B64 = null;
+const $=id=>document.getElementById(id);
+let OUT_FLEX=null,OUT_INV=null,OUT_FLEX_NAME='',OUT_INV_NAME='';
+
+['mir','tdr','cap','modelo','baseFlex','baseInv'].forEach(id=>{
+  $(id).addEventListener('change',e=>$(id+'N').textContent=e.target.files[0]?.name||'Sin archivo');
+});
+const log=(m,c='')=>{ $('log').style.display='block'; $('log').innerHTML+=`<div class="${c}">${m}</div>`; $('log').scrollTop=$('log').scrollHeight; };
+const status=(m,c='')=>$('status').innerHTML=`<span class="${c}">${m}</span>`;
+const norm=s=>String(s??'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ');
+const N=v=>{const n=Number(v);return Number.isFinite(n)?n:0};
+const fmt=n=>new Intl.NumberFormat('es-PE',{maximumFractionDigits:2}).format(n);
+const readFile=async f=>new Uint8Array(await f.arrayBuffer());
+const readWB=bytes=>XLSX.read(bytes,{type:'array',cellDates:false,cellFormula:true,cellNF:true,cellStyles:true});
+const aoa=(wb,sheet)=>XLSX.utils.sheet_to_json(wb.Sheets[sheet],{header:1,defval:null,raw:true});
+const hmap=row=>Object.fromEntries((row||[]).map((x,i)=>[norm(x),i]));
+const colLetter=n=>{let s='';for(;n>0;n=Math.floor((n-1)/26))s=String.fromCharCode(65+(n-1)%26)+s;return s};
+const excelDate=d=>(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate())-Date.UTC(1899,11,30))/86400000;
+const serialDate=n=>new Date(Date.UTC(1899,11,30)+Number(n)*86400000);
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+function sheetNameLike(wb, names){
+ for(const x of names){const f=wb.SheetNames.find(n=>norm(n)===norm(x));if(f)return f}
+ return null;
+}
+function getCurrentPeriod(mirRows,h){
+ const i=h['periodo']; let m=0; for(const r of mirRows)m=Math.max(m,N(r[i]));
+ return m;
+}
+function productGroups(rows,h){
+ const pi=h['producto']; return {
+  flex:rows.filter(r=>['flex65','flex80'].includes(norm(r[pi]))),
+  vida:rows.filter(r=>norm(r[pi]).replace(/\s/g,'').includes('vidainversion'))
+ };
+}
+function aggregate(rows,h,codeName,valueName){
+ const ci=h[norm(codeName)],vi=h[norm(valueName)],m=new Map();
+ for(const r of rows){
+   let code=r[ci]; if(code===null||code===undefined||code==='')code='';
+   code=String(code).replace(/\.0$/,'').trim();
+   const o=m.get(code)||{count:0,sum:0};o.count++;o.sum+=N(r[vi]);m.set(code,o);
+ }
+ return m;
+}
+function totalMap(m){let x=0;for(const o of m.values())x+=o.sum;return x}
+function capData(capWB){
+ const sn=sheetNameLike(capWB,['TD']); if(!sn)throw Error('Capital Flexible: no existe la hoja TD.');
+ const a=aoa(capWB,sn);
+ const get=(r,c)=>a[r-1]?.[c-1];
+ const cp={},cav={},current={};
+ // Tabla CP: E12:G14
+ for(let r=12;r<=16;r++){
+   const k=norm(get(r,5)); if(k && !k.includes('total')) cp[k]={count:N(get(r,6)),sum:N(get(r,7))};
+ }
+ // Tabla CAV: E4:G7
+ for(let r=4;r<=9;r++){
+   const k=norm(get(r,5)); if(k && !k.includes('total')) cav[k]={count:N(get(r,6)),sum:N(get(r,7))};
+ }
+ // Resumen actual: A19:C21
+ for(let r=19;r<=23;r++){
+   const k=norm(get(r,1)); if(k && !k.includes('total'))current[k]={reserve:N(get(r,2)),rent:N(get(r,3))};
+ }
+ return {cp,cav,current};
+}
+function modelInterestMap(modelWB){
+ const sn=sheetNameLike(modelWB,['BBDD']); if(!sn)throw Error('Modelo FLEX: no existe la hoja BBDD.');
+ const a=aoa(modelWB,sn); if(a.length<3)throw Error('Modelo FLEX: BBDD sin registros.');
+ const h=hmap(a[1]);
+ let pol=h['num poliza']; if(pol===undefined)pol=1;
+ let interest=h['val intereses cam']; if(interest===undefined)interest=28; // AC
+ const m=new Map();
+ for(let i=2;i<a.length;i++){const p=String(a[i][pol]??'').trim();if(p)m.set(p,N(a[i][interest]));}
+ return m;
+}
+function tdrRows(tdrWB){
+ const sn=sheetNameLike(tdrWB,['TDRentabilidadFondos'])||tdrWB.SheetNames[0];
+ const a=aoa(tdrWB,sn),h=hmap(a[0]);
+ ['codigofondo','fecha','tasa'].forEach(k=>{if(h[k]===undefined)throw Error('TDR: falta '+k)});
+ return {a:a.slice(1).filter(r=>r.some(v=>v!==null)),h};
+}
+
+// --- XML / ZIP preserving original workbook parts ---
+async function pathsForSheets(zip){
+ const parser=new DOMParser();
+ const wb=parser.parseFromString(await zip.file('xl/workbook.xml').async('text'),'application/xml');
+ const rel=parser.parseFromString(await zip.file('xl/_rels/workbook.xml.rels').async('text'),'application/xml');
+ const rm={}; [...rel.getElementsByTagName('Relationship')].forEach(x=>rm[x.getAttribute('Id')]=x.getAttribute('Target'));
+ const out={};
+ [...wb.getElementsByTagName('sheet')].forEach(s=>{
+   const rid=s.getAttribute('r:id')||s.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships','id');
+   let t=rm[rid]; if(!t)return; if(!t.startsWith('xl/'))t='xl/'+t.replace(/^\//,''); out[s.getAttribute('name')]=t;
+ });
+ return out;
+}
+function findSheetPath(paths,names){for(const n of names){const k=Object.keys(paths).find(x=>norm(x)===norm(n));if(k)return paths[k]}return null}
+function setCellNode(doc,row,ref,value,style){
+ let c=[...row.children].find(x=>x.tagName.endsWith('c')&&x.getAttribute('r')===ref);
+ if(!c){c=doc.createElementNS('http://schemas.openxmlformats.org/spreadsheetml/2006/main','c');c.setAttribute('r',ref);row.appendChild(c)}
+ if(style!==undefined&&style!==null)c.setAttribute('s',style);
+ while(c.firstChild)c.removeChild(c.firstChild);
+ if(value===null||value===undefined||value===''){c.removeAttribute('t');return c}
+ if(typeof value==='number' && Number.isFinite(value)){
+   c.removeAttribute('t');const v=doc.createElementNS(c.namespaceURI,'v');v.textContent=String(value);c.appendChild(v);
+ }else{
+   c.setAttribute('t','inlineStr');const is=doc.createElementNS(c.namespaceURI,'is');const t=doc.createElementNS(c.namespaceURI,'t');t.textContent=String(value);is.appendChild(t);c.appendChild(is);
+ }
+ return c;
+}
+function cellStyle(row,ref){const c=[...row.children].find(x=>x.tagName.endsWith('c')&&x.getAttribute('r')===ref);return c?.getAttribute('s')||null}
+function ensureRow(doc,sheetData,r,cloneFrom=null){
+ let row=[...sheetData.children].find(x=>x.tagName.endsWith('row')&&Number(x.getAttribute('r'))===r);
+ if(row)return row;
+ row=doc.createElementNS(sheetData.namespaceURI,'row');row.setAttribute('r',String(r));
+ if(cloneFrom){
+  ['ht','customHeight','s','customFormat','outlineLevel'].forEach(a=>{const v=cloneFrom.getAttribute(a);if(v!==null)row.setAttribute(a,v)});
+ }
+ let inserted=false;
+ for(const x of [...sheetData.children]){if(Number(x.getAttribute('r'))>r){sheetData.insertBefore(row,x);inserted=true;break}}
+ if(!inserted)sheetData.appendChild(row); return row;
+}
+async function patchCells(zip,sheetNames,updates){
+ const paths=await pathsForSheets(zip),path=findSheetPath(paths,sheetNames);if(!path)throw Error('No se encontró hoja '+sheetNames[0]);
+ const txt=await zip.file(path).async('text'),doc=new DOMParser().parseFromString(txt,'application/xml');
+ const sd=doc.getElementsByTagName('sheetData')[0];
+ const rows={};[...sd.children].forEach(r=>rows[Number(r.getAttribute('r'))]=r);
+ for(const [ref,val] of Object.entries(updates)){
+   const m=ref.match(/^([A-Z]+)(\d+)$/),r=Number(m[2]);
+   const row=rows[r]||(rows[r]=ensureRow(doc,sd,r,rows[r-1]||rows[Object.keys(rows).map(Number).sort((a,b)=>a-b).pop()]));
+   setCellNode(doc,row,ref,val,cellStyle(row,ref));
+ }
+ zip.file(path,new XMLSerializer().serializeToString(doc));
+}
+async function rewriteBBDD(zip,mirA,modelMap){
+ const paths=await pathsForSheets(zip),path=findSheetPath(paths,['2. BBDD']);if(!path)throw Error('Flex: no existe 2. BBDD');
+ const txt=await zip.file(path).async('text'),doc=new DOMParser().parseFromString(txt,'application/xml'),sd=doc.getElementsByTagName('sheetData')[0];
+ const row4=[...sd.children].find(r=>Number(r.getAttribute('r'))===4);
+ const style={}; if(row4)[...row4.children].forEach(c=>{if(c.tagName.endsWith('c'))style[c.getAttribute('r').replace(/\d+/,'')]=c.getAttribute('s')});
+ const rows={};[...sd.children].forEach(r=>rows[Number(r.getAttribute('r'))]=r);
+ const data=mirA.slice(1),newEnd=3+data.length;
+ for(let i=0;i<data.length;i++){
+   const rr=4+i,row=rows[rr]||(rows[rr]=ensureRow(doc,sd,rr,row4));
+   const pol=String(data[i][1]??'').trim(),mirInterest=N(data[i][28]),check=(modelMap.get(pol)??mirInterest)-mirInterest;
+   setCellNode(doc,row,'A'+rr,check,style['A']);
+   for(let j=1;j<=97;j++)setCellNode(doc,row,colLetter(j+1)+rr,data[i][j],style[colLetter(j+1)]);
+ }
+ // limpiar datos viejos B:CT si el universo disminuyó
+ for(const [r,row] of Object.entries(rows)){
+   const rr=Number(r);if(rr<=newEnd||rr<4)continue;
+   for(const c of [...row.children]){
+     if(!c.tagName.endsWith('c'))continue;const ref=c.getAttribute('r'),letters=ref.match(/[A-Z]+/)[0];
+     let n=0;for(const ch of letters)n=n*26+ch.charCodeAt(0)-64;
+     if(n>=1&&n<=98)row.removeChild(c);
+   }
+ }
+ zip.file(path,new XMLSerializer().serializeToString(doc));
+}
+async function appendTDR(zip,tdr){
+ const paths=await pathsForSheets(zip),path=findSheetPath(paths,['5.Rendimiento fondos']);if(!path)return;
+ const txt=await zip.file(path).async('text'),doc=new DOMParser().parseFromString(txt,'application/xml'),sd=doc.getElementsByTagName('sheetData')[0];
+ const rows=[...sd.children],last=Math.max(...rows.map(r=>Number(r.getAttribute('r'))||0));
+ const styleRow=rows.find(r=>Number(r.getAttribute('r'))===last);
+ const style={}; if(styleRow)[...styleRow.children].forEach(c=>{if(c.tagName.endsWith('c'))style[c.getAttribute('r').replace(/\d+/,'')]=c.getAttribute('s')});
+ const h=tdr.h;
+ // Buscar claves existentes B/C
+ const existing=new Set();
+ for(const row of rows){
+   const get=col=>{const c=[...row.children].find(x=>x.getAttribute?.('r')===col+row.getAttribute('r'));return c?.getElementsByTagName('v')[0]?.textContent||''};
+   const b=get('B'),c=get('C');if(b&&c)existing.add(String(b).replace(/^0+/,'')+'|'+c);
+ }
+ let rr=last+1;
+ for(const r of tdr.a){
+   const code=String(r[h['codigofondo']]??'').trim(),date=N(r[h['fecha']]),key=code.replace(/^0+/,'')+'|'+date;
+   if(existing.has(key))continue;
+   const row=ensureRow(doc,sd,rr,styleRow);
+   const tasa=N(r[h['tasa']]),unit=N(r[h['unidadtasa']])||100;
+   setCellNode(doc,row,'B'+rr,code,style['B']);setCellNode(doc,row,'C'+rr,date,style['C']);
+   setCellNode(doc,row,'E'+rr,tasa,style['E']);setCellNode(doc,row,'F'+rr,tasa/unit,style['F']);
+   if(h['descripcionfondo']!==undefined)setCellNode(doc,row,'G'+rr,r[h['descripcionfondo']],style['G']);
+   rr++; existing.add(key);
+ }
+ zip.file(path,new XMLSerializer().serializeToString(doc));
+}
+async function forceRecalc(zip){
+ const path='xl/workbook.xml',txt=await zip.file(path).async('text'),doc=new DOMParser().parseFromString(txt,'application/xml');
+ let cp=doc.getElementsByTagName('calcPr')[0];
+ if(!cp){cp=doc.createElementNS('http://schemas.openxmlformats.org/spreadsheetml/2006/main','calcPr');doc.documentElement.appendChild(cp)}
+ cp.setAttribute('calcMode','auto');cp.setAttribute('fullCalcOnLoad','1');cp.setAttribute('forceFullCalc','1');
+ zip.file(path,new XMLSerializer().serializeToString(doc));
+}
+async function getBaseBytes(id){const f=$(id).files[0];if(!f)throw Error('Debes cargar '+id);return readFile(f)}
+function combined(aggCP,aggCAV,code){return (aggCP.get(String(code))?.sum||0)+(aggCAV.get(String(code))?.sum||0)}
+function counts(agg,code){return agg.get(String(code))?.count||0}
+function sums(agg,code){return agg.get(String(code))?.sum||0}
+
+async function previousAdjustment(baseBytes){
+ try{
+  const wb=readWB(baseBytes),sn=sheetNameLike(wb,['3.Reservas segun fondo']),isn=sheetNameLike(wb,['4.Inversiones']);
+  const a=aoa(wb,sn),i=aoa(wb,isn);
+  const combined1=N(a[4]?.[3])+N(a[20]?.[3]); // D5 + D21 in Flex layout
+  let last=null;for(let r=0;r<i.length;r++){const d=N(i[r]?.[0]);if(d>0&&(!last||d>last.d))last={d,row:r,b:N(i[r]?.[1])}}
+  return last?last.b-combined1:0;
+ }catch(e){return 0}
+}
+function outputNames(period){
+ const d=serialDate(period),mm=String(d.getUTCMonth()+1).padStart(2,'0'),yyyy=d.getUTCFullYear(),tag=mm+yyyy;
+ return {flex:`${tag} Flex.xlsx`,inv:`Inversiones_${tag}.xlsx`,label:`${mm}/${yyyy}`,start:excelDate(new Date(Date.UTC(yyyy,d.getUTCMonth(),1)))};
+}
+async function patchReserveSheets(zip,isFlex,ag,cap){
+ const cpF=ag.cpF,cavF=ag.cavF,cpV=ag.cpV,cavV=ag.cavV;
+ if(isFlex){
+  const u={};
+  const cpCodes=['1','8','9','10','11','12','13','14','15'];cpCodes.forEach((c,i)=>{u['C'+(5+i)]=counts(cpF,c);u['D'+(5+i)]=sums(cpF,c)});
+  const flexCount=ag.flexCount;u.C15=flexCount;u.D15=totalMap(cpF);
+  const cavCodes=['1','8','9','10','12','13','14','15'];cavCodes.forEach((c,i)=>{u['C'+(21+i)]=counts(cavF,c);u['D'+(21+i)]=sums(cavF,c)});
+  const non=cavCodes.reduce((a,c)=>a+counts(cavF,c),0);u.C29=Math.max(0,flexCount-non);u.D29=0;u.C30=flexCount;u.D30=totalMap(cavF);u.D34=u.D15+u.D30;
+  await patchCells(zip,['3.Reservas segun fondo'],u);
+ }else{
+  const u={};const cpCodes=['1','8','9','10','11','12','13','14','15'];
+  cpCodes.forEach((c,i)=>{u['D'+(5+i)]=counts(cpF,c);u['E'+(5+i)]=sums(cpF,c)});
+  u.D15=ag.flexCount;u.E15=totalMap(cpF);
+  const cavCodes=['1','8','9','10','12','13','14','15'];
+  cavCodes.forEach((c,i)=>{u['D'+(21+i)]=counts(cavF,c);u['E'+(21+i)]=sums(cavF,c)});
+  u.D29=Math.max(0,ag.flexCount-cavCodes.reduce((a,c)=>a+counts(cavF,c),0));u.E29=0;u.D30=ag.flexCount;u.E30=totalMap(cavF);u.E34=u.E15+u.E30;
+  await patchCells(zip,['3.Reservas segun fondo'],u);
+ }
+ const u8={};
+ const row0=isFlex?24:7, cpCodes=['1','8','9','10','11','12','13','14','15'];
+ cpCodes.forEach((c,i)=>{u8['E'+(row0+i)]=counts(cpF,c);u8['F'+(row0+i)]=sums(cpF,c)});
+ const rVida=isFlex?33:16;u8['E'+rVida]=counts(cpV,'16');u8['F'+rVida]=sums(cpV,'16');u8['E'+(rVida+1)]=counts(cpV,'17');u8['F'+(rVida+1)]=sums(cpV,'17');
+ const rCap=isFlex?35:18;u8['E'+rCap]=cap.cp['capitalizacion']?.count||0;u8['F'+rCap]=cap.cp['capitalizacion']?.sum||0;
+ u8['E'+(rCap+1)]=cap.cp['moderado']?.count||0;u8['F'+(rCap+1)]=cap.cp['moderado']?.sum||0;
+ const cpTotalRow=isFlex?38:21;
+ u8['E'+cpTotalRow]=cpCodes.reduce((a,c)=>a+counts(cpF,c),0)+counts(cpV,'16')+counts(cpV,'17')+(cap.cp['capitalizacion']?.count||0)+(cap.cp['moderado']?.count||0);
+ u8['F'+cpTotalRow]=cpCodes.reduce((a,c)=>a+sums(cpF,c),0)+sums(cpV,'16')+sums(cpV,'17')+(cap.cp['capitalizacion']?.sum||0)+(cap.cp['moderado']?.sum||0);
+
+ const cav0=isFlex?43:26,cavCodes=['1','8','9','10','12','13','14','15'];
+ cavCodes.forEach((c,i)=>{u8['E'+(cav0+i)]=counts(cavF,c);u8['F'+(cav0+i)]=sums(cavF,c)});
+ const rv=isFlex?52:35;u8['E'+rv]=counts(cavV,'16');u8['F'+rv]=sums(cavV,'16');u8['E'+(rv+1)]=counts(cavV,'18');u8['F'+(rv+1)]=sums(cavV,'18');
+ const rc=isFlex?55:38;
+ [['capitalizacion',0],['conservador',1],['moderado',2]].forEach(([k,o])=>{u8['E'+(rc+o)]=cap.cav[k]?.count||0;u8['F'+(rc+o)]=cap.cav[k]?.sum||0});
+ const cavTotalRow=isFlex?60:43;
+ u8['E'+cavTotalRow]=cavCodes.reduce((a,c)=>a+counts(cavF,c),0)+counts(cavV,'16')+counts(cavV,'18')+['capitalizacion','conservador','moderado'].reduce((a,k)=>a+(cap.cav[k]?.count||0),0);
+ u8['F'+cavTotalRow]=cavCodes.reduce((a,c)=>a+sums(cavF,c),0)+sums(cavV,'16')+sums(cavV,'18')+['capitalizacion','conservador','moderado'].reduce((a,k)=>a+(cap.cav[k]?.sum||0),0);
+ const grand=isFlex?null:46;if(grand){u8['E'+grand]=u8['E'+cpTotalRow]+u8['E'+cavTotalRow];u8['F'+grand]=u8['F'+cpTotalRow]+u8['F'+cavTotalRow]}
+ await patchCells(zip,['8.Reservas según fondo- Todos ','8.Reservas según fondo- Todos'],u8);
+ return {cpTotal:u8['F'+cpTotalRow],cavTotal:u8['F'+cavTotalRow]};
+}
+async function patchInvestment(zip,baseBytes,ag,cap,periodStart,adj,isFlex){
+ const wb=readWB(baseBytes),sn=sheetNameLike(wb,['4.Inversiones']),a=aoa(wb,sn);
+ let latest=-1,target=-1;
+ for(let r=0;r<a.length;r++){const d=N(a[r]?.[0]);if(d>latest){latest=d;target=r+1}}
+ if(Math.abs(latest-periodStart)<.1){} else target=target+1;
+ const cpF=ag.cpF,cavF=ag.cavF,cpV=ag.cpV,cavV=ag.cavV;
+ const u={},codes=['1','2','3','4','5','6','7','8','9','10','11','12','13','14','15'];
+ u['A'+target]=periodStart;
+ codes.forEach((c,i)=>u[colLetter(2+i)+target]=(c==='1'?combined(cpF,cavF,c)+adj:combined(cpF,cavF,c)));
+ const vida16=combined(cpV,cavV,'16'),vida17=sums(cpV,'17'),vida18=sums(cavV,'18');
+ u['R'+target]=vida16;u['S'+target]=vida18;u['T'+target]=vida17;
+ u['U'+target]=cap.current['capitalizacion']?.reserve||0;u['V'+target]=cap.current['moderado']?.reserve||0;u['W'+target]=cap.current['conservador']?.reserve||0;
+ let flexTotal=0;for(let i=0;i<15;i++)flexTotal+=N(u[colLetter(2+i)+target]);u['X'+target]=flexTotal;
+ u['Y'+target]=vida16+vida17+vida18+u['U'+target]+u['V'+target]+u['W'+target];u['Z'+target]=u['X'+target]+u['Y'+target];
+ await patchCells(zip,['4.Inversiones'],u);
+ return {row:target,total:u['Z'+target],flex:u['X'+target],vida:u['Y'+target]};
+}
+
+$('process').onclick=async()=>{
+ $('log').innerHTML='';$('log').style.display='block';$('downFlex').disabled=true;$('downInv').disabled=true;
+ try{
+  if(!window.XLSX||!window.JSZip)throw Error('No se pudieron cargar las librerías. Verifica tu conexión a internet y vuelve a abrir el HTML.');
+  const fs={mir:$('mir').files[0],tdr:$('tdr').files[0],cap:$('cap').files[0],modelo:$('modelo').files[0],baseFlex:$('baseFlex').files[0],baseInv:$('baseInv').files[0]};
+  if(Object.values(fs).some(x=>!x))throw Error('Debes cargar los 6 archivos: Flex base, Inversiones base y los 4 inputs del mes.');
+  status('Leyendo y validando inputs…','warn');
+  const [mirB,tdrB,capB,modB,baseFlex,baseInv]=await Promise.all([readFile(fs.mir),readFile(fs.tdr),readFile(fs.cap),readFile(fs.modelo),getBaseBytes('baseFlex'),getBaseBytes('baseInv')]);
+  const mirWB=readWB(mirB),tdrWB=readWB(tdrB),capWB=readWB(capB),modWB=readWB(modB);
+  const mirSN=mirWB.SheetNames[0],mirA=aoa(mirWB,mirSN),mh=hmap(mirA[0]);
+  const req=['numeropoliza','periodo','cp_codigofondo','cp_cuenta','cav_codigofondo','cav_cuenta','cp_interes','producto'];
+  const miss=req.filter(k=>mh[k]===undefined);if(miss.length)throw Error('MIR: faltan columnas '+miss.join(', '));
+  const rows=mirA.slice(1).filter(r=>r.some(v=>v!==null)),period=getCurrentPeriod(rows,mh),names=outputNames(period);
+  if(!period)throw Error('No se pudo identificar el período del MIR.');
+  log(`Período detectado: ${names.label}`,'ok');log(`MIR: ${rows.length.toLocaleString('es-PE')} registros.`);
+  const groups=productGroups(rows,mh),ag={cpF:aggregate(groups.flex,mh,'cp_codigofondo','cp_cuenta'),cavF:aggregate(groups.flex,mh,'cav_codigofondo','cav_cuenta'),cpV:aggregate(groups.vida,mh,'cp_codigofondo','cp_cuenta'),cavV:aggregate(groups.vida,mh,'cav_codigofondo','cav_cuenta'),flexCount:groups.flex.length,vidaCount:groups.vida.length};
+  const cap=capData(capWB),modelMap=modelInterestMap(modWB),tdr=tdrRows(tdrWB);
+  let diffs=0;for(const r of rows){const p=String(r[mh['numeropoliza']]??'').trim();if(modelMap.has(p)&&Math.abs(modelMap.get(p)-N(r[mh['cp_interes']]))>.01)diffs++}
+  log(`Cruce Modelo FLEX vs MIR: ${diffs} diferencias de interés superiores a 0.01.`,diffs?'warn':'ok');
+  log(`Capital Flexible: CP ${(cap.cp['capitalizacion']?.count||0)+(cap.cp['moderado']?.count||0)} registros; CAV ${['capitalizacion','moderado','conservador'].reduce((a,k)=>a+(cap.cav[k]?.count||0),0)} registros.`);
+
+  status('Actualizando plantillas sin alterar su formato…','warn');
+  const [zF,zI]=await Promise.all([JSZip.loadAsync(baseFlex),JSZip.loadAsync(baseInv)]);
+  await rewriteBBDD(zF,mirA,modelMap);log('2. BBDD actualizada con la MIR y validación contra Modelo FLEX.','ok');
+  await appendTDR(zF,tdr);log('5.Rendimiento fondos actualizado con TDR.','ok');
+  const rf=await patchReserveSheets(zF,true,ag,cap);const ri=await patchReserveSheets(zI,false,ag,cap);log('Reservas CP/CAV y Capital Flexible actualizadas.','ok');
+  const adj=await previousAdjustment(baseFlex);log(`Ajuste de continuidad del fondo 1: ${fmt(adj)}.`);
+  const invF=await patchInvestment(zF,baseFlex,ag,cap,names.start,adj,true);
+  const invI=await patchInvestment(zI,baseInv,ag,cap,names.start,adj,false);log(`4.Inversiones actualizada en la fila mensual ${invI.row}.`,'ok');
+  await Promise.all([forceRecalc(zF),forceRecalc(zI)]);
+  OUT_FLEX=await zF.generateAsync({type:'uint8array',compression:'DEFLATE',compressionOptions:{level:6}});
+  OUT_INV=await zI.generateAsync({type:'uint8array',compression:'DEFLATE',compressionOptions:{level:6}});
+  OUT_FLEX_NAME=names.flex;OUT_INV_NAME=names.inv;
+
+  $('kPeriod').textContent=names.label;$('kRows').textContent=rows.length.toLocaleString('es-PE');$('kFlex').textContent=groups.flex.length.toLocaleString('es-PE');$('kVida').textContent=groups.vida.length.toLocaleString('es-PE');$('kTotal').textContent=fmt(invI.total);$('kpis').style.display='grid';
+  $('downFlex').disabled=false;$('downInv').disabled=false;
+  status(`Proceso completado. Se generaron ${OUT_FLEX_NAME} e ${OUT_INV_NAME}.`,'ok');log('Validación final completada. Los libros se marcaron para recálculo automático al abrir en Excel.','ok');
+ }catch(e){console.error(e);status('Error: '+e.message,'bad');log('ERROR: '+e.message,'bad')}
+};
+
+function save(bytes,name){
+ const blob=new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),a=document.createElement('a');
+ a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000)
+}
+$('downFlex').onclick=()=>save(OUT_FLEX,OUT_FLEX_NAME);
+$('downInv').onclick=()=>save(OUT_INV,OUT_INV_NAME);
+</script>
+<script>
+document.querySelectorAll('.tilt').forEach(card=>{
+  card.addEventListener('mousemove',e=>{
+    const r=card.getBoundingClientRect();
+    const x=(e.clientX-r.left)/r.width, y=(e.clientY-r.top)/r.height;
+    const rx=(.5-y)*5, ry=(x-.5)*7;
+    card.style.transform=`perspective(900px) rotateX(${rx}deg) rotateY(${ry}deg) translateY(-2px)`;
+    card.style.setProperty('--mx',`${x*100}%`);
+    card.style.setProperty('--my',`${y*100}%`);
+  });
+  card.addEventListener('mouseleave',()=>card.style.transform='');
+});
+document.querySelectorAll('.nav a').forEach(a=>{
+  a.addEventListener('click',()=>{
+    document.querySelectorAll('.nav a').forEach(x=>x.classList.remove('active'));
+    a.classList.add('active');
+  });
+});
+['mir','tdr','cap','modelo','baseFlex','baseInv'].forEach(id=>{
+  const el=document.getElementById(id);
+  if(!el)return;
+  el.addEventListener('change',()=>{
+    const card=el.closest('.glass-card');
+    if(el.files[0]){
+      card.style.borderColor='rgba(44,227,170,.42)';
+      card.style.boxShadow='0 22px 60px rgba(0,0,0,.30),0 0 22px rgba(44,227,170,.08)';
+    }
+  });
+});
+</script>
+
+</body>
+</html>
+<style>
+.brand-orb,.brand-title{display:none!important}
+</style>
